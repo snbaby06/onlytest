@@ -158,7 +158,6 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.05);
         }
 
-        /* Interactive SVG Styles */
         svg .zone {
             cursor: pointer;
             transition: all 0.2s ease-in-out;
@@ -409,7 +408,7 @@
         import { getAuth, signInWithPopup, TwitterAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js";
 
         const firebaseConfig = {
-          apiKey: "AIzaSyBmpuPvtMHsA0Ky-anBYns5fOX0pOGMIfY",
+          ClientKey: "AIzaSyBmpuPvtMHsA0Ky-anBYns5fOX0pOGMIfY",
           authDomain: "plavebkk.firebaseapp.com",
           databaseURL: "https://plavebkk-default-rtdb.asia-southeast1.firebasedatabase.app",
           projectId: "plavebkk",
@@ -424,6 +423,7 @@
         const auth = getAuth(app);
         const twitterProvider = new TwitterAuthProvider();
 
+        // Export Firebase Functions to Window Level
         window.db = db;
         window.dbRef = ref;
         window.onValue = onValue;
@@ -434,6 +434,13 @@
         window.signInWithPopup = signInWithPopup;
         window.signOut = signOut;
         window.onAuthStateChanged = onAuthStateChanged;
+
+        // Auto-listen auth state inside Module
+        onAuthStateChanged(auth, (user) => {
+            window.currentUser = user;
+            if (typeof window.renderAuthBar === 'function') window.renderAuthBar();
+            if (typeof window.renderZoneDetails === 'function') window.renderZoneDetails();
+        });
     </script>
 </head>
 <body>
@@ -802,42 +809,37 @@
     let selectedZoneId = null; 
     let selectedHearts = []; 
     let globalLikesData = {};
-    let currentUser = null;
 
-    // Realtime Listener & Auth Setup
     window.addEventListener('load', () => {
         const checkFirebaseReady = setInterval(() => {
             if (window.db && window.auth) {
                 clearInterval(checkFirebaseReady);
-                initAuth();
                 initRealtimeDatabase();
             }
         }, 100);
     });
 
-    function initAuth() {
-        window.onAuthStateChanged(window.auth, (user) => {
-            currentUser = user;
-            renderAuthBar();
-            renderZoneDetails();
-        });
-    }
-
     function loginWithX() {
+        if (!window.signInWithPopup || !window.twitterProvider) {
+            alert("ระบบล็อกอินกำลังโหลด กรุณาลองใหม่อีกครั้งใน 1-2 วินาที");
+            return;
+        }
         window.signInWithPopup(window.auth, window.twitterProvider)
             .then((result) => {
-                currentUser = result.user;
+                window.currentUser = result.user;
                 renderAuthBar();
                 renderZoneDetails();
             })
             .catch((error) => {
+                console.error("X Login error:", error);
                 alert("เข้าสู่ระบบผ่าน X ไม่สำเร็จ: " + error.message);
             });
     }
 
     function logout() {
+        if (!window.signOut) return;
         window.signOut(window.auth).then(() => {
-            currentUser = null;
+            window.currentUser = null;
             renderAuthBar();
             renderZoneDetails();
         });
@@ -845,9 +847,9 @@
 
     function renderAuthBar() {
         const authContainer = document.getElementById('authContainer');
-        if (currentUser) {
-            const screenName = currentUser.reloadUserInfo?.screenName || currentUser.displayName || 'User';
-            const photoURL = currentUser.photoURL || 'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';
+        if (window.currentUser) {
+            const screenName = window.currentUser.reloadUserInfo?.screenName || window.currentUser.displayName || 'User';
+            const photoURL = window.currentUser.photoURL || 'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';
             authContainer.innerHTML = `
                 <div class="user-profile-badge">
                     <img src="${photoURL}" alt="${screenName}">
@@ -865,7 +867,6 @@
         }
     }
 
-    // Realtime Database Fetch
     function initRealtimeDatabase() {
         const likesRef = window.dbRef(window.db, 'zone_likes_v2');
         
@@ -946,7 +947,7 @@
         });
 
         const btnConfirm = document.getElementById('btnConfirmVote');
-        if (!currentUser) {
+        if (!window.currentUser) {
             btnConfirm.innerText = 'โปรดล็อกอิน X ก่อนเพื่อเลือกโซน';
             btnConfirm.disabled = true;
         } else {
@@ -958,7 +959,7 @@
     }
 
     function selectHeartOption(heartKey) {
-        if (!currentUser) {
+        if (!window.currentUser) {
             alert("กรุณาเข้าสู่ระบบด้วย X ก่อนทำการเลือกหัวใจครับ");
             return;
         }
@@ -972,10 +973,10 @@
     }
 
     function submitVote() {
-        if (!selectedZoneId || selectedHearts.length === 0 || !currentUser) return;
+        if (!selectedZoneId || selectedHearts.length === 0 || !window.currentUser) return;
 
-        const handle = currentUser.reloadUserInfo?.screenName || currentUser.displayName || 'User';
-        const uid = currentUser.uid;
+        const handle = window.currentUser.reloadUserInfo?.screenName || window.currentUser.displayName || 'User';
+        const uid = window.currentUser.uid;
 
         if (window.db) {
             selectedHearts.forEach(heartKey => {
@@ -1042,6 +1043,8 @@
     window.submitVote = submitVote;
     window.loginWithX = loginWithX;
     window.logout = logout;
+    window.renderAuthBar = renderAuthBar;
+    window.renderZoneDetails = renderZoneDetails;
 </script>
 </body>
 </html>
